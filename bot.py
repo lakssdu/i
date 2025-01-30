@@ -142,7 +142,7 @@ def handle_c(message):
         return
 
     args = message.text.split()
-    if len(args) != 3 or ":" not in args[1]:
+    if len(args) != 2 or ":" not in args[1]:
         bot.reply_to(
             message,
             (
