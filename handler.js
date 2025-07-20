@@ -63,14 +63,33 @@ global.dfail = (type, m, conn) => {
 // Almacena datos de usuarios, chats, grupos y configuraciones para acceso rápido.
 // lastClean registra la última vez que se limpió el caché.
 // chatUpdates y criticalSettings ayudan a la invalidación inteligente.
-const cache = {
-  users: new Map(), // Cache para datos de usuario (sender-chatId)
-  chats: new Map(), // Cache para datos de chat (chatId)
-  groups: new Map(), // Cache para metadatos de grupo (chatId)
-  settings: null, // Cache global para las configuraciones del bot
-  lastClean: Date.now(), // Timestamp de la última limpieza del caché
-  chatUpdates: new Map(), // Timestamp de la última actualización de un chat
-  criticalSettings: new Map(), // Cache para configuraciones críticas del chat (modoadmin, antiLag, isBanned)
+class LRUCache {
+  constructor(limit = 500, ttl = 180000) {
+    this.limit = limit
+    this.ttl = ttl
+    this.cache = new Map()
+  }
+  get(key) {
+    if (!this.cache.has(key)) return undefined
+    const item = this.cache.get(key)
+    if (Date.now() - item.timestamp > this.ttl) {
+      this.cache.delete(key)
+      return undefined
+    }
+    this.cache.delete(key)
+    this.cache.set(key, item)
+    return item
+  }
+  set(key, val) {
+    val.timestamp = Date.now()
+    if (this.cache.has(key)) this.cache.delete(key)
+    else if (this.cache.size >= this.limit) this.cache.delete(this.cache.keys().next().value)
+    this.cache.set(key, val)
+  }
+  delete(key) { this.cache.delete(key) }
+  clear() { this.cache.clear() }
+  entries() { return this.cache.entries() }
+  [Symbol.iterator]() { return this.cache[Symbol.iterator]() }
 }
 
 // Constantes para la gestión del caché
@@ -78,6 +97,16 @@ const MAX_CACHE_AGE_CRITICAL = 120000 // 2 minutos para configuraciones crítica
 const MAX_CACHE_AGE_CHAT = 180000 // 3 minutos para datos de chat completos (reducido de 5 min)
 const MAX_CACHE_AGE_USER = 180000 // 3 minutos para datos de usuario completos (reducido de 5 min)
 const CACHE_CLEAN_INTERVAL = 180000 // 3 minutos para la limpieza periódica del caché
+
+const cache = {
+  users: new LRUCache(1000, MAX_CACHE_AGE_USER),
+  chats: new LRUCache(500, MAX_CACHE_AGE_CHAT),
+  groups: new LRUCache(100, MAX_CACHE_AGE_CHAT),
+  settings: null,
+  lastClean: Date.now(),
+  chatUpdates: new LRUCache(500, MAX_CACHE_AGE_CHAT),
+  criticalSettings: new LRUCache(500, MAX_CACHE_AGE_CRITICAL),
+}
 
 // ✅ FUNCIÓN MEJORADA PARA INVALIDAR CACHE ESPECÍFICO
 // Permite invalidar partes específicas del caché para asegurar la frescura de los datos.
