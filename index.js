@@ -482,7 +482,12 @@ global.reload = async (_ev, filename) => {
 }
 
 Object.freeze(global.reload)
-watch(pluginFolder, global.reload)
+let reloadTimer
+watch(pluginFolder, (ev, filename) => {
+  if (!pluginFilter(filename)) return
+  clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => global.reload(ev, filename), 500)
+})
 await global.reloadHandler()
     
 async function _quickTest() {
